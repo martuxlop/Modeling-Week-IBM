@@ -1,23 +1,45 @@
 import numpy as np
-from scipy.stats import poisson
+from scipy.stats import poisson, nbinom
 
-def esperanza_analitica_1(problema, i, xi, q=0.999):
-    lam = problema.demanda_media[i]
-    d_max = int(poisson.ppf(q, lam))    # valor max de la demanda para cubrir el 99.9% de los casos
-    demandas = np.arange(d_max + 1)
-    probs = poisson.pmf(demandas, lam)
-    probs = probs / probs.sum()   # normalización
+#funcion auxiliar para saber la distribucion de demanda
+def obtener_distribucion(problema, i, q=0.999):
+
+    params = problema.parametros_demanda[i]
+
+    if problema.tipo_demanda == "poisson":
+
+        mu = params["mu"]
+        d_max = int(poisson.ppf(q, mu))
+
+        demandas = np.arange(d_max + 1)
+        probs = poisson.pmf(demandas, mu)
+
+    elif problema.tipo_demanda == "binomial_negativa":
+
+        r = params["r"]
+        p = params["p"]
+
+        d_max = int(nbinom.ppf(q, r, p))
+
+        demandas = np.arange(d_max + 1)
+        probs = nbinom.pmf(demandas, r, p)
+
+    else:
+        raise ValueError("Distribución de demanda no reconocida.")
+
+    probs = probs / probs.sum()
+
+    return demandas, probs
+
+def esperanza_analitica_1(problema, i, xi):
+    demandas, probs = obtener_distribucion(problema, i)
     costes = np.abs(demandas - xi)
-    return np.sum(probs * costes)
+    return float(np.sum(probs * costes))
 
 
 def esperanza_montecarlo_1(problema, i, xi, N=20000, q=0.999):
-    lam = problema.demanda_media[i]
-    d_max = int(poisson.ppf(q, lam))
-    demandas = np.arange(d_max + 1)
-    probs = poisson.pmf(demandas, lam)
-    probs = probs / probs.sum()
-    
+    demandas, probs = obtener_distribucion(problema, i, q)
+
     muestras = np.random.choice(
         demandas,
         size=N,
@@ -25,27 +47,20 @@ def esperanza_montecarlo_1(problema, i, xi, N=20000, q=0.999):
     )
     return np.mean(np.abs(muestras - xi))
 
-def esperanza_analitica_2(problema, i, xi, q=0.999):
-    lam = problema.demanda_media[i]
-    d_max = int(poisson.ppf(q, lam))
-    demandas = np.arange(d_max + 1)
-    probs = poisson.pmf(demandas, lam)
-    probs = probs / probs.sum()
+def esperanza_analitica_2(problema, i, xi):
+    demandas, probs = obtener_distribucion(problema, i)
     costes = (
         problema.gamma[i] * np.maximum(demandas - xi, 0)
         + problema.beta[i] * np.maximum(xi - demandas, 0)
     )
-    return np.sum(probs * costes)
 
-def esperanza_montecarlo_2(problema, i, xi, N=20000, q=0.999, rng=None):
-    rng = np.random.default_rng() if rng is None else rng
-    lam = problema.demanda_media[i]
-    d_max = int(poisson.ppf(q, lam))
-    demandas = np.arange(d_max + 1)
-    probs = poisson.pmf(demandas, lam)
-    probs = probs / probs.sum()
+    return float(np.sum(probs * costes))
 
-    muestras = rng.choice(
+def esperanza_montecarlo_2(problema, i, xi, N=20000):
+
+    demandas, probs = obtener_distribucion(problema, i)
+
+    muestras = np.random.choice(
         demandas,
         size=N,
         p=probs

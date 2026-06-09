@@ -2,7 +2,7 @@
 
 import numpy as np
 
-
+ 
 class ProblemaAbsoluto:
     """
     Problema 1:
@@ -14,10 +14,12 @@ class ProblemaAbsoluto:
             x_i entero no negativo
     """
 
-    def __init__(self, C, demanda_media):
+    def __init__(self, C, tipo_demanda, parametros_demanda):
+
         self.C = int(C)
-        self.demanda_media = np.array(demanda_media, dtype=float)
-        self.n = len(self.demanda_media)
+        self.tipo_demanda = tipo_demanda
+        self.parametros_demanda = parametros_demanda
+        self.n = len(parametros_demanda)
 
     def es_factible(self, x):
         x = np.array(x)
@@ -41,12 +43,17 @@ class ProblemaPenalizado:
             x_i entero no negativo
     """
 
-    def __init__(self, C, demanda_media, gamma, beta):
+    def __init__(self, C, tipo_demanda, parametros_demanda, gamma, beta):
+
         self.C = int(C)
-        self.demanda_media = np.array(demanda_media, dtype=float)
+
+        self.tipo_demanda = tipo_demanda
+        self.parametros_demanda = parametros_demanda
+
         self.gamma = np.array(gamma, dtype=float)
         self.beta = np.array(beta, dtype=float)
-        self.n = len(self.demanda_media)
+
+        self.n = len(parametros_demanda)
 
         if len(self.gamma) != self.n or len(self.beta) != self.n:
             raise ValueError("gamma y beta deben tener longitud n.")
