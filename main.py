@@ -1,20 +1,23 @@
-from problema import ProblemaAbsoluto, ProblemaPenalizado
-from greedy import asignar_greedy
+import numpy as np
 
-from calculo_esperanza import (
-    esperanza_analitica_1,
-    esperanza_montecarlo_1,
-    esperanza_analitica_2,
-    esperanza_montecarlo_2
+from problema import (
+    ProblemaAbsoluto,
+    ProblemaPenalizado,
+    parametros_binomial_negativa,
 )
+from greedy import asignar_greedy
+from calculo_esperanza import esperanza_analitica, crear_esperanza_montecarlo
+
+
+SEED = 12345
 
 
 def mostrar_resultados(nombre, problema, esperanza):
     x, coste = asignar_greedy(problema, esperanza)
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print(nombre)
-    print("="*60)
+    print("=" * 60)
     print("Asignación:", x)
     print("Conductores usados:", x.sum(), "/", problema.C)
     print("Coste esperado:", round(coste, 4))
@@ -22,6 +25,7 @@ def mostrar_resultados(nombre, problema, esperanza):
 
 
 def main():
+    rng = np.random.default_rng(SEED)
 
     parametros_poisson = [
         {"mu": 5},
@@ -47,25 +51,51 @@ def main():
     mostrar_resultados(
         "PROBLEMA 1 - ANALÍTICO",
         problema1,
-        esperanza_analitica_1
+        esperanza_analitica
     )
 
     mostrar_resultados(
         "PROBLEMA 1 - MONTE CARLO",
         problema1,
-        esperanza_montecarlo_1
+        crear_esperanza_montecarlo(problema1, rng)
     )
 
     mostrar_resultados(
         "PROBLEMA 2 - ANALÍTICO",
         problema2,
-        esperanza_analitica_2
+        esperanza_analitica
     )
 
     mostrar_resultados(
         "PROBLEMA 2 - MONTE CARLO",
         problema2,
-        esperanza_montecarlo_2
+        crear_esperanza_montecarlo(problema2, rng)
+    )
+
+    # Mismas medias que el escenario Poisson, pero con sobredispersión
+    # (varianza > media) mediante Binomial Negativa.
+    medias = [5, 8, 3, 6]
+    parametros_nbinom = [
+        parametros_binomial_negativa(media=m, varianza=2 * m)
+        for m in medias
+    ]
+
+    problema3 = ProblemaAbsoluto(
+        C=20,
+        tipo_demanda="binomial_negativa",
+        parametros_demanda=parametros_nbinom
+    )
+
+    mostrar_resultados(
+        "PROBLEMA 1 (BINOMIAL NEGATIVA) - ANALÍTICO",
+        problema3,
+        esperanza_analitica
+    )
+
+    mostrar_resultados(
+        "PROBLEMA 1 (BINOMIAL NEGATIVA) - MONTE CARLO",
+        problema3,
+        crear_esperanza_montecarlo(problema3, rng)
     )
 
 

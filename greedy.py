@@ -1,4 +1,8 @@
 import numpy as np
+
+from calculo_esperanza import coste_total
+
+
 def asignar_greedy(problema, esperanza_zona):
     n, C = problema.n, problema.C
     x = np.zeros(n, dtype=int)
@@ -16,4 +20,4 @@ def asignar_greedy(problema, esperanza_zona):
         coste_sig[i]    = esperanza_zona(problema, i, x[i] + 1)  # solo recalcula la zona tocada
         ganancia[i]     = coste_actual[i] - coste_sig[i]
 
-    return x, float(np.mean(coste_actual))
+    return x, coste_total(problema, x, esperanza_zona)

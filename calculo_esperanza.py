@@ -1,74 +1,50 @@
+# calculo_esperanza.py
+
 import numpy as np
-from scipy.stats import poisson, nbinom
-
-#funcion auxiliar para saber la distribucion de demanda
-def obtener_distribucion(problema, i, q=0.999):
-
-    params = problema.parametros_demanda[i]
-
-    if problema.tipo_demanda == "poisson":
-
-        mu = params["mu"]
-        d_max = int(poisson.ppf(q, mu))
-
-        demandas = np.arange(d_max + 1)
-        probs = poisson.pmf(demandas, mu)
-
-    elif problema.tipo_demanda == "binomial_negativa":
-
-        r = params["r"]
-        p = params["p"]
-
-        d_max = int(nbinom.ppf(q, r, p))
-
-        demandas = np.arange(d_max + 1)
-        probs = nbinom.pmf(demandas, r, p)
-
-    else:
-        raise ValueError("Distribución de demanda no reconocida.")
-
-    probs = probs / probs.sum()
-
-    return demandas, probs
-
-def esperanza_analitica_1(problema, i, xi):
-    demandas, probs = obtener_distribucion(problema, i)
-    costes = np.abs(demandas - xi)
-    return float(np.sum(probs * costes))
 
 
-def esperanza_montecarlo_1(problema, i, xi, N=20000, q=0.999):
-    demandas, probs = obtener_distribucion(problema, i, q)
+def esperanza_analitica(problema, i, xi):
+    """
+    Esperanza exacta del coste de la zona i para la asignación xi, calculada
+    sobre la distribución (truncada y cacheada) de la demanda.
+    """
+    demandas, probs = problema.distribucion(i)
+    return float(np.sum(probs * problema.coste(i, demandas, xi)))
 
-    muestras = np.random.choice(
-        demandas,
-        size=N,
-        p=probs
-    )
-    return np.mean(np.abs(muestras - xi))
 
-def esperanza_analitica_2(problema, i, xi):
-    demandas, probs = obtener_distribucion(problema, i)
-    costes = (
-        problema.gamma[i] * np.maximum(demandas - xi, 0)
-        + problema.beta[i] * np.maximum(xi - demandas, 0)
-    )
+def coste_total(problema, x, esperanza_zona):
+    """
+    Valor de la función objetivo para una asignación x arbitraria:
 
-    return float(np.sum(probs * costes))
+        F(x) = (1/n) sum_i E[ coste_i(d_i, x_i) ]
 
-def esperanza_montecarlo_2(problema, i, xi, N=20000):
+    `esperanza_zona` es el método de cálculo de la esperanza por zona
+    (analítico, Monte Carlo o AE), con la firma esperanza_zona(problema, i, xi).
 
-    demandas, probs = obtener_distribucion(problema, i)
+    Es un evaluador independiente del algoritmo de optimización: sirve tanto
+    para puntuar candidatas en la búsqueda por fuerza bruta como para verificar
+    de forma autónoma el coste devuelto por el greedy.
+    """
+    return float(np.mean([
+        esperanza_zona(problema, i, int(x[i])) for i in range(problema.n)
+    ]))
 
-    muestras = np.random.choice(
-        demandas,
-        size=N,
-        p=probs
-    )
 
-    costes = (
-        problema.gamma[i] * np.maximum(muestras - xi, 0)
-        + problema.beta[i] * np.maximum(xi - muestras, 0)
-    )
+def crear_esperanza_montecarlo(problema, rng, N=20000):
+    """
+    Construye un estimador Monte Carlo del coste por zona.
 
-    return float(np.mean(costes))
+    Muestrea N demandas reales de cada zona UNA sola vez (con el generador
+    reproducible `rng`) y reutiliza esas muestras para cualquier asignación
+    xi. Esto evita remuestrear en cada llamada del greedy y, al usar números
+    aleatorios comunes, mantiene coherentes las ganancias marginales.
+
+    Devuelve una función con la firma esperanza_zona(problema, i, xi),
+    compatible con `asignar_greedy`.
+    """
+    muestras = {i: problema.muestrear(i, N, rng) for i in range(problema.n)}
+
+    def esperanza_montecarlo(problema, i, xi):
+        return float(np.mean(problema.coste(i, muestras[i], xi)))
+
+    return esperanza_montecarlo
