@@ -1,0 +1,9 @@
+# Núcleo numérico
+numpy==2.4.5
+scipy==1.17.1
+
+# Módulo cuántico (Amplitude Estimation)
+# Nota: en Qiskit >= 1.0 los algoritmos viven en el paquete qiskit-algorithms
+# (no en qiskit.algorithms como indica el enunciado, que refiere a Qiskit 0.x).
+qiskit==2.4.1
+qiskit-algorithms==0.4.0
