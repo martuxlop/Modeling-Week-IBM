@@ -1,10 +1,6 @@
 import numpy as np
 
-from problema import (
-    ProblemaAbsoluto,
-    ProblemaPenalizado,
-    parametros_binomial_negativa,
-)
+from problema import ProblemaAbsoluto, ProblemaPenalizado
 from greedy import asignar_greedy
 from calculo_esperanza import esperanza_analitica, crear_esperanza_montecarlo
 
@@ -35,17 +31,15 @@ def main():
     ]
 
     problema1 = ProblemaAbsoluto(
-        C=20,
-        tipo_demanda="poisson",
-        parametros_demanda=parametros_poisson
+    C=20,
+    parametros_demanda=parametros_poisson
     )
 
     problema2 = ProblemaPenalizado(
-        C=20,
-        tipo_demanda="poisson",
-        parametros_demanda=parametros_poisson,
-        gamma=[10, 8, 12, 9],
-        beta=[2, 3, 2, 4]
+    C=20,
+    parametros_demanda=parametros_poisson,
+    gamma=[10, 8, 12, 9],
+    beta=[2, 3, 2, 4]
     )
 
     mostrar_resultados(
@@ -70,32 +64,6 @@ def main():
         "PROBLEMA 2 - MONTE CARLO",
         problema2,
         crear_esperanza_montecarlo(problema2, rng)
-    )
-
-    # Mismas medias que el escenario Poisson, pero con sobredispersión
-    # (varianza > media) mediante Binomial Negativa.
-    medias = [5, 8, 3, 6]
-    parametros_nbinom = [
-        parametros_binomial_negativa(media=m, varianza=2 * m)
-        for m in medias
-    ]
-
-    problema3 = ProblemaAbsoluto(
-        C=20,
-        tipo_demanda="binomial_negativa",
-        parametros_demanda=parametros_nbinom
-    )
-
-    mostrar_resultados(
-        "PROBLEMA 1 (BINOMIAL NEGATIVA) - ANALÍTICO",
-        problema3,
-        esperanza_analitica
-    )
-
-    mostrar_resultados(
-        "PROBLEMA 1 (BINOMIAL NEGATIVA) - MONTE CARLO",
-        problema3,
-        crear_esperanza_montecarlo(problema3, rng)
     )
 
 

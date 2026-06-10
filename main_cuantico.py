@@ -158,13 +158,11 @@ def main():
 
     problema_abs = ProblemaAbsoluto(
         C=20,
-        tipo_demanda="poisson",
         parametros_demanda=parametros_poisson
     )
 
     problema_pen = ProblemaPenalizado(
         C=20,
-        tipo_demanda="poisson",
         parametros_demanda=parametros_poisson,
         gamma=[10, 8, 12, 9],
         beta=[2, 3, 2, 4]

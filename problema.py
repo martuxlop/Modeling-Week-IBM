@@ -1,62 +1,27 @@
 # problema.py
 
 import numpy as np
-from scipy.stats import poisson, nbinom
-
-
-def parametros_binomial_negativa(media, varianza):
-    """
-    Convierte (media, varianza) en los parámetros (r, p) de la Binomial
-    Negativa con la parametrización de scipy.stats.nbinom / numpy:
-
-        media     = r (1 - p) / p
-        varianza  = r (1 - p) / p**2 = media / p
-
-    de donde:
-
-        p = media / varianza
-        r = media**2 / (varianza - media)
-
-    Requiere sobredispersión (varianza > media). Esta es justamente la
-    situación que modela la mixtura Gamma-Poisson (lambda ~ Gamma), que da
-    lugar a la Binomial Negativa y a una varianza mayor que la media, a
-    diferencia de la Poisson (donde varianza = media).
-
-    Devuelve un dict {"r": r, "p": p} listo para usar como entrada de
-    `parametros_demanda`.
-    """
-    if media <= 0:
-        raise ValueError("La media debe ser positiva.")
-    if varianza <= media:
-        raise ValueError(
-            "La Binomial Negativa requiere varianza > media (sobredispersión)."
-        )
-
-    p = media / varianza
-    r = media ** 2 / (varianza - media)
-    return {"r": r, "p": p}
+from scipy.stats import poisson
 
 
 class Problema:
     """
     Clase base.
 
-    Define la estructura común a todos los problemas:
+    Define la estructura común:
         - restricciones / factibilidad,
-        - la distribución de demanda por zona (cacheada),
-        - el muestreo de la variable aleatoria de demanda.
+        - distribución de demanda Poisson por zona,
+        - muestreo de la demanda.
 
     El coste determinista de cada zona se define en las subclases mediante
     el método `coste(i, d, xi)`.
     """
 
-    def __init__(self, C, tipo_demanda, parametros_demanda):
+    def __init__(self, C, parametros_demanda):
         self.C = int(C)
-        self.tipo_demanda = tipo_demanda
         self.parametros_demanda = parametros_demanda
         self.n = len(parametros_demanda)
 
-        # Cache de distribuciones truncadas por (zona, cuantil de truncamiento).
         self._cache_distribucion = {}
 
     def es_factible(self, x):
@@ -71,58 +36,36 @@ class Problema:
 
     def _pmf(self, i, valores):
         """Evalúa la pmf de la demanda de la zona i en `valores` (array de enteros)."""
-        params = self.parametros_demanda[i]
-
-        if self.tipo_demanda == "poisson":
-            return poisson.pmf(valores, params["mu"])
-
-        elif self.tipo_demanda == "binomial_negativa":
-            return nbinom.pmf(valores, params["r"], params["p"])
-
-        else:
-            raise ValueError("Distribución de demanda no reconocida.")
+        return poisson.pmf(valores, self.parametros_demanda[i]["mu"])
 
     def media_varianza(self, i):
-        """Media y varianza teóricas de la demanda de la zona i."""
-        params = self.parametros_demanda[i]
-
-        if self.tipo_demanda == "poisson":
-            mu = float(params["mu"])
-            return mu, mu
-
-        elif self.tipo_demanda == "binomial_negativa":
-            r, p = params["r"], params["p"]
-            media = r * (1 - p) / p
-            return float(media), float(media / p)
-
-        else:
-            raise ValueError("Distribución de demanda no reconocida.")
+        """Media y varianza teóricas de la demanda de la zona i (Poisson)."""
+        mu = float(self.parametros_demanda[i]["mu"])
+        return mu, mu
 
     def distribucion(self, i, q=0.999):
         """
-        Devuelve (demandas, probs) de la zona i, truncada al cuantil q y
-        renormalizada. El resultado se cachea porque es constante por zona.
+        Devuelve (demandas, probs) de la zona i, truncada al cuantil q
+        y renormalizada.
+
+        Se asume siempre:
+
+            d_i ~ Poisson(mu_i)
         """
         clave = (i, q)
+
         if clave in self._cache_distribucion:
             return self._cache_distribucion[clave]
 
-        params = self.parametros_demanda[i]
+        mu = self.parametros_demanda[i]["mu"]
 
-        if self.tipo_demanda == "poisson":
-            d_max = int(poisson.ppf(q, params["mu"]))
-
-        elif self.tipo_demanda == "binomial_negativa":
-            d_max = int(nbinom.ppf(q, params["r"], params["p"]))
-
-        else:
-            raise ValueError("Distribución de demanda no reconocida.")
-
+        d_max = int(poisson.ppf(q, mu))
         demandas = np.arange(d_max + 1)
         probs = self._pmf(i, demandas)
         probs = probs / probs.sum()
 
         self._cache_distribucion[clave] = (demandas, probs)
+
         return demandas, probs
 
     def distribucion_ventana(self, i, k_izq=3.0, k_der=4.0, masa_minima=0.999):
@@ -175,23 +118,15 @@ class Problema:
 
     def muestrear(self, i, N, rng):
         """
-        Muestrea N realizaciones de la demanda real de la zona i usando el
-        generador `rng` (np.random.Generator). No trunca la distribución:
-        es Monte Carlo sobre la variable aleatoria original.
+        Muestrea N realizaciones de la demanda real de la zona i.
+
+        No trunca la distribución: es Monte Carlo sobre la Poisson original.
         """
-        params = self.parametros_demanda[i]
+        mu = self.parametros_demanda[i]["mu"]
 
-        if self.tipo_demanda == "poisson":
-            return rng.poisson(params["mu"], size=N)
-
-        elif self.tipo_demanda == "binomial_negativa":
-            return rng.negative_binomial(params["r"], params["p"], size=N)
-
-        else:
-            raise ValueError("Distribución de demanda no reconocida.")
+        return rng.poisson(mu, size=N)
 
     def coste(self, i, d, xi):
-        """Coste determinista de la zona i dada la demanda d y la asignación xi."""
         raise NotImplementedError
 
 
@@ -205,13 +140,10 @@ class ProblemaPenalizado(Problema):
         s.a.
             sum_i x_i <= C
             x_i entero no negativo
-
-    gamma_i: coste de oportunidad (demanda no atendida).
-    beta_i:  coste de conductor inutilizado.
     """
 
-    def __init__(self, C, tipo_demanda, parametros_demanda, gamma, beta):
-        super().__init__(C, tipo_demanda, parametros_demanda)
+    def __init__(self, C, parametros_demanda, gamma, beta):
+        super().__init__(C, parametros_demanda)
 
         self.gamma = np.array(gamma, dtype=float)
         self.beta = np.array(beta, dtype=float)
@@ -221,6 +153,7 @@ class ProblemaPenalizado(Problema):
 
     def coste(self, i, d, xi):
         d = np.asarray(d)
+
         return (
             self.gamma[i] * np.maximum(d - xi, 0)
             + self.beta[i] * np.maximum(xi - d, 0)
@@ -237,16 +170,15 @@ class ProblemaAbsoluto(ProblemaPenalizado):
             sum_i x_i <= C
             x_i entero no negativo
 
-    Es el caso particular del problema penalizado con gamma_i = beta_i = 1,
-    ya que |d - x| = max(d - x, 0) + max(x - d, 0).
+    Es el caso particular del problema penalizado con gamma_i = beta_i = 1.
     """
 
-    def __init__(self, C, tipo_demanda, parametros_demanda):
+    def __init__(self, C, parametros_demanda):
         n = len(parametros_demanda)
+
         super().__init__(
-            C,
-            tipo_demanda,
-            parametros_demanda,
+            C=C,
+            parametros_demanda=parametros_demanda,
             gamma=np.ones(n),
             beta=np.ones(n),
         )
